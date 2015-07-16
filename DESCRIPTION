@@ -3,7 +3,7 @@ Title: Tutorial on 450k methylation analysis with minfi
 Description: A workshop on 450k methylation analysis with minfi
 Author: Jean-Philippe Fortin, Kasper Daniel Hansen
 Version: 0.1
-Depends: minfi, minfiData, FlowSorted.Blood.450k
+Depends: minfi, minfiData, FlowSorted.Blood.450k, sva
 Suggests: knitr, BiocStyle, rmarkdown
 License: Artistic-2.0
 VignetteBuilder: knitr
