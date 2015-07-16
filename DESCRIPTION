@@ -1,0 +1,11 @@
+Package: bioc2015methylation
+Title: Workshop on 450k methylation analysis with minfi
+Version: 0.1
+Date: 2015-07-14
+Author: Jean-Philippe Fortin, Kasper Daniel Hansen
+Description: A workshop on 450k methylation analysis with minfi
+Depends: minfi, minfiData
+Suggests: knitr, BiocStyle, rmarkdown
+License: Artistic-2.0
+VignetteBuilder: knitr
+
