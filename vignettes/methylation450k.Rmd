@@ -43,7 +43,7 @@ This tutorial can be installed from GitHub using `r CRANpkg("devtools")` by
 
 ```{r eval=FALSE}
 library(devtools)
-install_github("hansenlab/XX")
+install_github("hansenlab/tutorial.450k")
 ```
 
 
