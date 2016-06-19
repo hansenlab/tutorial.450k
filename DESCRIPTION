@@ -12,6 +12,7 @@ Depends:
     FlowSorted.Blood.450k,
     sva,
     Gviz,
+    BiocStyle
     R (>= 2.10)
 Suggests:
     knitr,
