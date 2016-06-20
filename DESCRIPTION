@@ -12,10 +12,13 @@ Depends:
     FlowSorted.Blood.450k,
     sva,
     Gviz,
+    shinyMethyl,
+    shinyMethylData,
     R (>= 2.10)
 Suggests:
     knitr,
     BiocStyle,
+    devtools,
     rmarkdown
 License: Artistic-2.0
 VignetteBuilder: knitr
