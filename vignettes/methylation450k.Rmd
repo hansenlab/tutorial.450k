@@ -552,8 +552,15 @@ head(bh_dmrs$table, n = 3)
 
 As an example, we have run the bump hunting algorithm to find DMRs between colon and kidney (20 samples each from TCGA), with $B=1000$ permutations, and a cutoff of 0.2 on the Beta values:
 
+```{r, eval = FALSE, echo = FALSE}
+# Ugly hack to make data available in vignette
+# TODO: What's the proper way to do this?
+lazyLoad(paste0(system.file(package = "tutorial.450k"), "/data/Rdata"))
+```
+
 ```{r, eval=FALSE}
 # NOTE: The `dmrs` object is included with the tutorial.450k package
+library(tutorial.450k)
 dmrs
 head(dmrs$table)
 ```
@@ -573,7 +580,8 @@ __NOTE:__ This figure takes a while to generate because `r Biocpkg("Gviz")` need
 ```{r, eval = TRUE, echo = TRUE, Gviz}
 library(Gviz)
 genome <- "hg19"
-dmr <- dmrs$table[1, ]
+# NOTE: Using the non-permuted 
+dmr <- bh_dmrs$table[1, ]
 chrom <- dmr$chr
 start <- dmr$start
 end <- dmr$end
