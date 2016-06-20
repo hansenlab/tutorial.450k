@@ -552,7 +552,7 @@ head(bh_dmrs$table, n = 3)
 
 As an example, we have run the bump hunting algorithm to find DMRs between colon and kidney (20 samples each from TCGA), with $B=1000$ permutations, and a cutoff of 0.2 on the Beta values:
 
-```{r, eval=TRUE}
+```{r, eval=FALSE}
 # NOTE: The `dmrs` object is included with the tutorial.450k package
 dmrs
 head(dmrs$table)
