@@ -63,22 +63,6 @@ biocLite("hansenlab/tutorial.450k")
 ```
 
 
-## Breaking ...
-
-At the time of writing, there was an issue with the `granges()` accessor [https://stat.ethz.ch/pipermail/bioc-devel/2016-June/009412.html](https://stat.ethz.ch/pipermail/bioc-devel/2016-June/009412.html). If this is still a problem, we need to run this code chunk as a temporary workaround:
-
-```{r, breaking}
-setMethod("granges", "RangedSummarizedExperiment", 
-          function(x, use.mcols = FALSE, ...) {
-            if (!identical(use.mcols, FALSE)) {
-              stop("\"granges\" method for RangedSummarizedExperiment objects ",
-                   "does not support the 'use.mcols' argument")
-            }
-            SummarizedExperiment::rowRanges(x, use.mcols = FALSE, ...)
-          }
-)
-```
-
 
 ## 450k array design and terminology
 
