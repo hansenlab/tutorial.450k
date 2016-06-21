@@ -673,6 +673,11 @@ sva.results <- sva(mval, mod, mod0)
 
 Once the surrogate variables are computed, one can include them in the downstream analysis to adjust for unknown unwanted variation. See the [sva vignette](http://bioconductor.org/packages/release/bioc/vignettes/sva/inst/doc/sva.pdf) for a more comprehensive use of `sva`.
 
+## Importing data from The Cancer Genome Atlas (TCGA)
+
+The package [tcgaR](https://github.com/Jfortin1/tcgaR) directly imports 450k methylation data into R from the TCGA portal by building an `RGChannelSet`. Normal and tumor samples are available for more than 20 cancer types. The package also contains convenient functions to import the corresponding metadata and clinical data.
+
+
 # Other tasks
 
 ## A/B compartments prediction.
