@@ -1,10 +1,26 @@
 Package: tutorial.450k
-Title: Tutorial on 450k methylation analysis with minfi
+Title: A workshop on 450k methylation analysis with minfi
 Description: A workshop on 450k methylation analysis with minfi
-Author: Jean-Philippe Fortin, Kasper Daniel Hansen
-Version: 0.1
-Depends: minfi, minfiData, FlowSorted.Blood.450k, sva
-Suggests: knitr, BiocStyle, rmarkdown
+Authors@R: c(person("Jean-Philippe", "Fortin", role = "aut"),
+             person(c("Kasper", "Daniel"), "Hansen", role = c("cre", "aut"),
+               email = "kasperdanielhansen@gmail.com"),
+             person("Peter", "Hickey", role = "ctb"))
+Version: 0.1.1
+Depends:
+    minfi,
+    minfiData,
+    FlowSorted.Blood.450k,
+    sva,
+    Gviz,
+    shinyMethyl,
+    shinyMethylData,
+    R (>= 2.10)
+Suggests:
+    knitr,
+    BiocStyle,
+    devtools,
+    rmarkdown
 License: Artistic-2.0
 VignetteBuilder: knitr
-
+LazyData: true
+RoxygenNote: 5.0.1

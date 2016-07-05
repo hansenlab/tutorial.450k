@@ -1,5 +1,5 @@
 ---
-author: Jean-Philippe Fortin, Kasper Daniel Hansen
+author: Jean-Philippe Fortin, Peter Hickey, Kasper Daniel Hansen
 title: Analysis of 450k data using minfi
 bibliography: methylation.bib
 vignette: >
@@ -10,19 +10,18 @@ vignette: >
 output:
   BiocStyle::html_document
 ---
-
+  
 ```{r style, echo = FALSE, results = 'asis'}
 BiocStyle::markdown()
 ```
 
 # Introduction
 
-The goal of this tutorial is to present a standard analysis workflow of 450K data with the package `r Biocpkg("minfi")`, incorporating the functions recently added to the package. We invite you to read the software paper recently published [@minfi] and the online package vignette on the Bioconductor project website for more details.
+The goal of this tutorial is to present a standard analysis workflow of 450K data with the package `r Biocpkg("minfi")`, incorporating the functions recently added to the package. We invite you to read the software paper [@minfi] and the online package vignette on the Bioconductor project website for more details.
 
 We will start from the very beginning by reading input raw data (IDAT files) from an example dataset, and ending with a list of candidate genes for differential methylation. Among others, we will cover quality control assessments, different within-array and between-array normalizations, SNPs removal, sex prediction, differentially methylated positions (DMPs) analysis and bump hunting for differentially methylated regions (DMRs). 
 
-If time permits, we will introduce a complementary interactive visualization tool package available through Bioconductor, `r Biocpkg("shinyMethyl")`, that allows interactive quality control assessment. 
-
+If time permits, we will introduce a complementary interactive visualization tool package available through Bioconductor, `r Biocpkg("shinyMethyl")`, that allows interactive quality control assessment.
 
 ## Dependencies
 
@@ -30,25 +29,42 @@ If time permits, we will introduce a complementary interactive visualization too
 library(minfi)
 library(minfiData)
 library(sva)
+library(Gviz)
+library(FlowSorted.Blood.450k)
+library(shinyMethyl)
+library(shinyMethylData)
+library(tutorial.450k)
 ```
 
-These dependencies can be installed from Bioconductor using
+These dependencies can be installed from Bioconductor.
+
+__NOTE:__ No need to run this chunk if you're in the workshop at BioC 2016 and using the Amazon Machine Image
 
 ```{r eval=FALSE}
+# WARNING: No need to run this chunk if you're in the workshop at BioC 2016 and 
+#          using the Amazon Machine Image
 source("http://www.bioconductor.org/biocLite.R")
-biocLite(c("minfiData", "sva"))
+useDevel(TRUE)
+# NOTE: You may not need `type = "source"`
+biocLite(c("minfi", "minfiData", "sva", "Gviz", "FlowSorted.Blood.450k", 
+           "shinyMethyl", "shinyMethylData"), 
+         type = "source")
 ```
+
+Note that we are using the **devel** branch of Bioconductor in this vignette (`v3.4` at time of writing).
 
 This tutorial can be installed from GitHub using `r CRANpkg("devtools")` by
 
 ```{r eval=FALSE}
-library(devtools)
-install_github("hansenlab/tutorial.450k")
+# NOTE: You'll also need the devtools package to install the tutorial from 
+#       GitHub
+biocLite("devtools")
+biocLite("hansenlab/tutorial.450k")
 ```
 
 
 
-## 450k Array design and terminology
+## 450k array design and terminology
 
 In this section, we briefly introduce the 450K array as well as the terminology used throughout the `r Biocpkg("minfi")` package. Each sample is measured on a single array, in two different color channels (red and green). As the name of the platform indicates, each array measures more than 450,000 CpG positions. For each CpG, we have two measurements: a methylated intensity and an unmethylated intensity. Depending on the probe design, the signals are reported in different colors:
 
@@ -64,7 +80,7 @@ $$\frac{M}{M + U + 100}$$
 where $M$ and $U$ denote the methylated and unmethylated signals respectively. 
 
 **MValue**:
-$$Mval = \log{\biggl(\frac{M}{U}\biggr)}$$
+$$\log{\biggl(\frac{M}{U}\biggr)}$$
 
 **DMP**: Differentially methylated position: single genomic position that has a different methylated level in two different groups of samples (or conditions)
 
@@ -78,15 +94,34 @@ $$Mval = \log{\biggl(\frac{M}{U}\biggr)}$$
 
 
 
+## Other Illumina methylation arrays
+
+As of Bioconductor 3.3, `r Biocpkg("minfi")` supports the Illumina EPIC methylation array (also known as the 850k), the successor to the 450k array, and has partial supports for the older 27k array.
+
+The 27k array uses the *Type I* design for all probes. The EPIC array, like the 450k array, uses a combination of *Type I* and *Type II* probes. Some additional details about the EPIC array:
+
+- Each slide contains 8 arrays ($8 \times 1$ grid)
+- Includes more CpG sites outside of CpG islands
+- Includes non-CpG methylated sites identified in human stem cells (CHH sites)
+- Includes differentially methylated sites identified in tumor versus normal
+- Targets FANTOM5 enhancers
+- Targets ENCODE open chromatin and enhancers
+- Targets DNase hypersensitive sites
+- Targets miRNA promoter regions
+- $> 90\%$ of content contained on the 450k array
+
 # Reading Data
 
-The starting point of `r Biocpkg("minfi")` is reading the .IDAT files with the built-in function `read.450k.exp`. Several options are available: the user can specify the sample filenames to be read in along with the directory path, or can specify the directory that contains the files. In the latter case, all the files with the extension .IDAT located in the directory will be loaded into R. The user can also read in a sample sheet, and then use the sample sheet to load the data into a `RGChannelSet`. For more information, see the `r Biocpkg("minfi")` vignette. Here, we will load the dataset containing 6 samples from the `r Biocpkg("minfiData")` package using the sample sheet provided within the package: 
+The starting point of `r Biocpkg("minfi")` is reading the .IDAT files with the built-in function `read.metharray.exp`[^deprecated]. Several options are available: the user can specify the sample filenames to be read in along with the directory path, or can specify the directory that contains the files. In the latter case, all the files with the extension .IDAT located in the directory will be loaded into R. The user can also read in a sample sheet, and then use the sample sheet to load the data into a `RGChannelSet`. For more information, see the `r Biocpkg("minfi")` vignette. Here, we will load the dataset containing 6 samples from the `r Biocpkg("minfiData")` package using the sample sheet provided within the package: 
+
+[^deprecated]: The `read.metharray`, `read.metharray.exp`, and `read.metharray.sheet` functions supersede the now-deprecated `read.450k`, `read.450k.exp`, and `read.450k.sheet` functions, respectively. These functions were 
+renamed because they now also support the EPIC array.
 
 ```{r}
 baseDir <- system.file("extdata", package="minfiData")
-targets <- read.450k.sheet(baseDir)
+targets <- read.metharray.sheet(baseDir)
 targets
-RGSet <- read.450k.exp(targets = targets)
+RGSet <- read.metharray.exp(targets = targets)
 ```
 
 The class of RGSet is a `RGChannelSet` object. This is the initial object of a minfi analysis that contains the raw intensities in the green and red channels. Note that this object contains the intensities of the internal control probes as well. Because we read the data from a data sheet experiment, the phenotype data is also stored in the `RGChannelSet` and can be accessed via the accessor command `pData`:
@@ -104,7 +139,7 @@ manifest
 head(getProbeInfo(manifest))
 ```
 
-See the [minfi vignette](http://bioconductor.org/packages/release/bioc/vignettes/minfi/inst/doc/minfi.pdf) for more information. 
+See the [minfi vignette](http://bioconductor.org/packages/devel/bioc/vignettes/minfi/inst/doc/minfi.pdf) for more information. 
 
 
 # Classes
@@ -120,7 +155,7 @@ MSet <- preprocessRaw(RGSet)
 MSet
 ```
 
-This function matches up the different probes and color channels.  Note that the dimension of this object is much smaller than for the `RGChannelSet`; this is because CpGs measured by type I probes are measured by 2 probes.
+`preprocessRaw` matches up the different probes and color channels. Note that the dimension of this object is much smaller than for the `RGChannelSet`; this is because CpGs measured by type I probes are measured by 2 probes.
 
 The accessors `getMeth` and `getUnmeth` can be used to get the methylated and unmethylated intensities matrices:
 
@@ -131,7 +166,7 @@ head(getUnmeth(MSet)[,1:3])
 
 Other preprocessing functions exists; see below for an extensive discussion.
 
-A `RatioSet` object is a class designed to store Beta values and/or M values instead of the methylated and unmethylated signals. An optional copy number matrix, `CN`, the sum of the methylated and unmethylated signals, can be also stored. Mapping a `MethylSet` to a `RatioSet` may be irreversible, i.e. one cannot be guranteed to  retrieve the methylated and unmethylated signals from a `RatioSet`.  A `RatioSet` can be created with the function `ratioConvert`:
+A `RatioSet` object is a class designed to store Beta values and/or M values instead of the methylated and unmethylated signals. An optional copy number matrix, `CN`, the sum of the methylated and unmethylated signals, can be also stored. Mapping a `MethylSet` to a `RatioSet` may be irreversible, i.e. one cannot be guaranteed to  retrieve the methylated and unmethylated signals from a `RatioSet`.  A `RatioSet` can be created with the function `ratioConvert`:
 
 ```{r}
 RSet <- ratioConvert(MSet, what = "both", keepCN = TRUE)
@@ -166,12 +201,12 @@ sampleNames <- sampleNames(GRset)
 probeNames <- featureNames(GRset)
 pheno <- pData(GRset)
 ```
-  
-To return the probe locations as a `GenomicRanges` objects, one can use the accessor `granges`:
+
+To return the probe locations as a `GRanges` objects, one can use the accessor `granges`:
 
 ```{r}
 gr <- granges(GRset)
-head(gr, n= 3)
+head(gr, n = 3)
 ```
 
 To access the full annotation, one can use the command `getAnnotation`:
@@ -186,12 +221,11 @@ names(annotation)
 The `mapToGenome` function can also be used on `MethylSet` to get a `GenomicMethylSet`.  The `ratioConvert` and `mapToGenome` functions commute, see the diagram above.
 
 
-
 # Quality control
 
 ## QC plot 
 
-`r Biocpkg("minfi")` provides a simple quality control plot that uses the log median intensity in both the methylated (M) and unmethylated (U) channels. When plotting these two medians against each other, it has been observed that good samples cluster together, while failed samples tend to separate and have lower median intensities. In order to obtain the methylated and unmethylated signals, we need to convert the `RGChannelSet` to an object containing the methylated and unmethylated signals using the function `preprocessRaw`. It takes as input a `RGChannelSet` and converts the red and green intensities to methylated and unmethylated signals according to the special 450K probe design, and returns the converted signals in a new object of class `MethylSet`. It does not perform any normalization.
+`r Biocpkg("minfi")` provides a simple quality control plot that uses the log median intensity in both the methylated (M) and unmethylated (U) channels. When plotting these two medians against each other, it has been observed that good samples cluster together, while failed samples tend to separate and have lower median intensities. In order to obtain the methylated and unmethylated signals, we need to convert the `RGChannelSet` to an object containing the methylated and unmethylated signals using the function `preprocessRaw`. As we've already seen, it takes as input a `RGChannelSet` and converts the red and green intensities to methylated and unmethylated signals according to the probe design of the array, and returns the converted signals in a new object of class `MethylSet`. It does not perform any normalization.
 
 
 The accessors `getMeth` and `getUnmeth` can be used to get the methylated and unmethylated intensities matrices:
@@ -205,7 +239,7 @@ The functions `getQC` and `plotQC` are designed to extract and plot the quality 
 
 ```{r}
 qc <- getQC(MSet)
-head(qc)
+qc
 plotQC(qc)
 ```
 
@@ -237,20 +271,23 @@ controlStripPlot(RGSet, controls="BISULFITE CONVERSION II")
 All the plots above can be exported into a pdf file in one step using the function `qcReport`:
 
 ```{r, eval=FALSE}
-qcReport(RGSet, pdf= "qcReport.pdf")
+qcReport(RGSet, 
+         sampNames = phenoData(RGSet)$Sample_Name, 
+         sampGroups = phenoData(RGSet)$Sample_Group, 
+         pdf= "qcReport.pdf")
 ```
 
 
 ## Sex prediction
 
-By looking at the median total intensity of the X chromosome-mapped probes, denoted $med(X)$, and the median total intensity of the Y-chromosome-mapped probes, denoted $med(Y)$, one can observe two different clusters of points corresponding to which gender the samples belong to. To predict the gender, minfi separates the points by using a cutoff on $\log_2{med(Y)}-\log_2{med(Y)}$. The default cutoff is $-2$.  Since the algorithm needs to map probes to the X-chr and to the Y-chr, the input of the function `getSex` needs to be a `GenomicMethylSet` or a `GenomicRatioSet`. 
+By looking at the median total intensity of the X chromosome-mapped probes, denoted $med(X)$, and the median total intensity of the Y-chromosome-mapped probes, denoted $med(Y)$, one can observe two different clusters of points corresponding to which sex the samples belong to. To predict the sex, minfi separates the points by using a cutoff on $\log_2{med(Y)}-\log_2{med(Y)}$. The default cutoff is $-2$.  Since the algorithm needs to map probes to the X-chr and to the Y-chr, the input of the function `getSex` needs to be a `GenomicMethylSet` or a `GenomicRatioSet`. 
 
 ```{r}
 predictedSex <- getSex(GRset, cutoff = -2)$predictedSex
-head(predictedSex)
+predictedSex
 ```
 
-To choose the cutoff to separate the two gender clusters, one can plot $med(Y)$ against $med(Y)$ with the function `plotSex`:
+To choose the cutoff to separate the two sex clusters, one can plot $med(Y)$ against $med(X)$ with the function `plotSex`:
 
 ```{r}
 plotSex(getSex(GRset, cutoff = -2))
@@ -258,7 +295,7 @@ plotSex(getSex(GRset, cutoff = -2))
 
 Finally, the function `addSex` applied to the `GenomicRatioSet` will add the predicted sex to the phenotype data. 
 
-**Note**: the function does not handle datasets with only females or only males
+**Note**: `getSex` does not handle datasets with only females or only males and the results will need more careful interpretation in the presence of sex chromosome aneuploidies.
 
 
 
@@ -268,22 +305,22 @@ Finally, the function `addSex` applied to the `GenomicRatioSet` will add the pre
 
 # Preprocessing and normalization
 
-So far, we did not use any normalization to process the data. Different normalization procedures are available in `r Biocpkg("minfi")`. Many people have asked us which normalization they should apply to their dataset. Our rule of thumb is the following. If there exist global biological methylation differences between your samples, as for instance a dataset with cancer and normal samples, or a dataset with different tissues/cell types, use the `preprocessFunnorm` function as it is aimed for such datasets. On the other hand, if you do not expect global differences between your samples, for instance a blood dataset, or one-tissue dataset, use the `preprocessQuantile` function. In our experience, these two normalization procedures perform always better than the functions `preprocessRaw`, `preprocessIllumina` and `preprocessSWAN` discussed below. For convenience, these functions are still implemented in the minfi package. 
+So far, we did not use any normalization to process the data. Different normalization procedures are available in `r Biocpkg("minfi")`. Many people have asked us which normalization they should apply to their dataset. Our rule of thumb is the following. If there exist global biological methylation differences between your samples, as for instance a dataset with cancer and normal samples, or a dataset with different tissues/cell types, use the `preprocessFunnorm` function as it is designed for such datasets. On the other hand, if you do not expect global differences between your samples, for instance a blood dataset, or one-tissue dataset, use the `preprocessQuantile` function. In our experience, these two normalization procedures perform always better than the functions `preprocessRaw`, `preprocessIllumina` and `preprocessSWAN` discussed below. For convenience, these functions are still implemented in the minfi package, as is `preprocessNoob`. 
 
 ## preprocessRaw
 
-As seen before, it converts a `RGChannelSet` to a `MethylSet` by converting the Red and Green channels into a matrix of methylated signals and a matrix of unmethylated signals. No normalization is performed. 
+As we've already seen, `preprocessRaw` converts a `RGChannelSet` to a `MethylSet` by converting the Red and Green channels into a matrix of methylated signals and a matrix of unmethylated signals. **No normalization is performed.** 
 
 Input: `RGChannelSet`  
 Output: `MethylSet`
 
 ## preprocessIllumina
 
-Convert a `RGChannelSet` to a `MethylSet` by implementing the preprocessing choices as available in Genome Studio: background subtraction and control normalization. Both of them are optional and turning them off is equivalent to raw preprocessing (`preprocessRaw`):
+Convert a `RGChannelSet` to a `MethylSet` by implementing the preprocessing choices as available in Illumina's Genome Studio software: background subtraction and control normalization. Each of these is optional, and turning them off is equivalent to raw preprocessing (`preprocessRaw`):
 
 ```{r}
 MSet.illumina <- preprocessIllumina(RGSet, bg.correct = TRUE,
-                               normalize = "controls")
+                                    normalize = "controls")
 ```
 
 Input: `RGChannelSet`  
@@ -291,9 +328,10 @@ Output: `MethylSet`
 
 ## preprocessSWAN
 
-Perform Subset-quantile within array normalization (SWAN) [@swan], a within-array normalization correction for the technical differences between the Type I and Type II array designs. The algorithm matches the Beta-value distributions of the Type I and Type II probes by applying a within-array quantile normalization separately for different subsets of probes (divided by CpG content). The input of SWAN is a `MethylSet`, and the function returns a `MethylSet` as well. If an `RGChannelSet` is provided instead, the function will first call `preprocessRaw` on the `RGChannelSet`, and then apply the SWAN normalization. We recommend setting a seed (using `set.seed`) before using `preprocessSWAN` to ensure that the normalized intensities will be reproducible. 
+Perform **s**ubset-quantile **w**ithin **a**rray **n**ormalization (SWAN) [@swan], a within-array normalization correction for the technical differences between the Type I and Type II array designs. The algorithm matches the Beta-value distributions of the Type I and Type II probes by applying a within-array quantile normalization separately for different subsets of probes (divided by CpG content). The input of SWAN is a `MethylSet`, and the function returns a `MethylSet` as well. If an `RGChannelSet` is provided instead, the function will first call `preprocessRaw` on the `RGChannelSet`, and then apply the SWAN normalization. We recommend setting a seed (using `set.seed`) before using `preprocessSWAN` to ensure that the normalized intensities will be reproducible. 
 
 ```{r}
+set.seed(666)
 MSet.swan <- preprocessSWAN(RGSet)
 ```
 
@@ -302,18 +340,21 @@ Output: `MethylSet`
 
 ## preprocessQuantile
 
-This function implements stratified quantile normalization preprocessing.  The normalization procedure is applied to the Meth and Unmeth intensities separately. The distribution of type I and type II signals is forced to be the same by first quantile normalizing the type II probes across samples and then interpolating a reference distribution to which we normalize the type I probes. Since probe types and probe regions are confounded and we know that DNAm distributions vary across regions we stratify the probes by region before applying this interpolation. Note that this algorithm relies on the assumptions necessary for quantile normalization to be applicable and thus is not recommended for cases where global changes are expected such as in cancer-normal comparisons. Note that this normalization procedure is essentially similar to one previously presented [@Touleimat:2012]. The different options can be summarized into the following list:
+This function implements stratified quantile normalization preprocessing.  The normalization procedure is applied to the Meth and Unmeth intensities separately. The distribution of type I and type II signals is forced to be the same by first quantile normalizing the type II probes across samples and then interpolating a reference distribution to which we normalize the type I probes. Since probe types and probe regions are confounded and we know that methylation distributions vary across regions we stratify the probes by region before applying this interpolation. Note that this algorithm relies on the assumptions necessary for quantile normalization to be applicable and thus is not recommended for cases where global changes are expected such as in cancer-normal comparisons. Note that this normalization procedure is essentially similar to one previously presented [@Touleimat:2012]. The different options can be summarized into the following list:
 
-1. If `fixMethOutlier` is `TRUE`, the functions fixes outliers of both the methylated and unmethylated channels when small intensities are close to zero. 
-2. If `removeBadSamples` is `TRUE`, it removes bad samples using the QC criterion discussed previously 
-3. Performs stratified subset quantile normalization if `quantileNormalize=TRUE` and `stratified=TRUE`
-4. Predicts the sex (if not provided in the `sex` argument)  using the function `getSex` and normalizes males and females separately for the probes on the X and Y chromosomes 
+1. If `fixMethOutliers = TRUE`, the functions fixes outliers of both the methylated and unmethylated channels when small intensities are close to zero. 
+2. If `removeBadSamples = TRUE`, it removes bad samples using the QC criterion discussed previously 
+3. Performs stratified subset quantile normalization if `quantileNormalize = TRUE` and `stratified = TRUE`
+4. Predicts the sex (if not provided in the `sex` argument) using the function `getSex` and normalizes males and females separately for the probes on the X and Y chromosomes 
 
 ```{r}
 GRset.quantile <- preprocessQuantile(RGSet, fixOutliers = TRUE,
-  removeBadSamples = TRUE, badSampleCutoff = 10.5,
-  quantileNormalize = TRUE, stratified = TRUE, 
-  mergeManifest = FALSE, sex = NULL)
+                                     removeBadSamples = TRUE, 
+                                     badSampleCutoff = 10.5,
+                                     quantileNormalize = TRUE, 
+                                     stratified = TRUE, 
+                                     mergeManifest = FALSE, 
+                                     sex = NULL)
 ```
 
 Input: `RGChannelSet`  
@@ -334,7 +375,7 @@ Output: `MethylSet`
 
 ## preprocessFunnorm
 
-The function `preprocessFunnorm` implements the functional normalization algorithm developed in [@funnorm]. Briefly, it uses the internal control probes present on the array to infer between-array technical variation. It is particularly useful for studies comparing conditions with known large-scale differences, such as cancer/normal studies, or between-tissue studies. It has been shown that for such studies, functional normalization outperforms other existing approaches [@funnorm]. By default, the function applies the `preprocessNoob` function as a first step for background substraction, and uses the first two principal components of the control probes to infer the unwanted variation. 
+The function `preprocessFunnorm` implements the functional normalization algorithm developed in [@funnorm]. Briefly, it uses the internal control probes present on the array to infer between-array technical variation. It is particularly useful for studies comparing conditions with known large-scale differences, such as cancer/normal studies, or between-tissue studies. It has been shown that for such studies, functional normalization outperforms other existing approaches [@funnorm]. By default, the function applies the `preprocessNoob` function as a first step for background subtraction, and uses the first two principal components of the control probes to infer the unwanted variation. 
 
 ```{r}
 GRset.funnorm <- preprocessFunnorm(RGSet)
@@ -345,7 +386,34 @@ Output: `GenomicRatioSet`
 
 As the `preprocessQuantile` function, it returns a `GenomicRatioSet` object.
 
+## The effect of different normalisation strategies
 
+The choice of normalisation can affect the result of downstream analyses. As an example, here we compare `preprocessRaw`, `preprocessQuantile`, and `preprocessFunnorm` when used to assess sample similarity with a multidimensional scaling plot (MDS).
+
+```{r, eval = TRUE, echo = TRUE, mdsPlot}
+par(mfrow = c(2, 2))
+# Following preprocessRaw()
+mdsPlot(getM(MSet.illumina), 
+        numPositions = 1000, 
+        sampGroups = targets$status,
+        sampNames = targets$person,
+        legendPos = "topright",
+        main = "preprocessRaw")
+# Following preprocessQuantile()
+mdsPlot(getM(GRset.quantile), 
+        numPositions = 1000, 
+        sampGroups = targets$status,
+        sampNames = targets$person,
+        legendPos = "topright",
+        main = "preprocessQuantile")
+# Following preprocessFunnorm()
+mdsPlot(getM(GRset.funnorm), 
+        numPositions = 1000, 
+        sampGroups = targets$status,
+        sampNames = targets$person,
+        legendPos = "bottomleft",
+        main = "preprocessFunnorm")
+```
 
 # Genetic variants and cell type composition
 
@@ -358,7 +426,7 @@ snps <- getSnpInfo(GRset)
 head(snps,10)
 ```
 
-`Probe`, `CpG` and `SBE` correspond the SNPs present inside the probe body, at the CpG interrogation and at the single nucleotide extension respectively. The columns with `rs` give the names of the SNPs while the columns with `maf` gives the minor allele frequency of the SNPs based on the dbSnp database. The function `addSnpInfo` will add to the `GenomicRanges` of the `GenomicRatioSet` the 6 columns: 
+`Probe`, `CpG` and `SBE` correspond to the SNPs present inside the probe body, at the CpG interrogation and at the single nucleotide extension, respectively. The columns with `rs` give the names of the SNPs while the columns with `maf` gives the minor allele frequency of the SNPs based on the dbSNP database. The function `addSnpInfo` will add to the `GenomicRanges` of the `GenomicRatioSet` the 6 columns: 
 
 ```{r}
 GRset <- addSnpInfo(GRset)
@@ -374,11 +442,11 @@ GRset <- dropLociWithSnps(GRset, snps=c("SBE","CpG"), maf=0)
 
 ## Cell type composition
 
-As shown in [@Jaffe:2014], biological findings in blood samples can often be confounded with cell type composition. In order to estimate the confounding levels between phenotype and cell type composition, the function `estimateCellCounts` depending on the package `r Biocpkg("FlowSorted.Blood.450k")`estimates the cell type composition of blood samples by using a modified version of the algorithm described in [@Houseman:2012]. The function takes as input a `RGChannelSet` and returns a cell counts vector for each samples:
+As shown in [@Jaffe:2014], biological findings in blood samples can often be confounded with cell type composition. In order to estimate the confounding levels between phenotype and cell type composition, the function `estimateCellCounts`, depending on the package `r Biocpkg("FlowSorted.Blood.450k")`, estimates the cell type composition of blood samples by using a modified version of the algorithm described in [@Houseman:2012]. The function takes as input a `RGChannelSet` and returns a cell counts vector for each samples:
 
 ```{r, eval=FALSE}
 library(FlowSorted.Blood.450k)
-cellCounts <- estimateCellCounts(RGset)
+cellCounts <- estimateCellCounts(RGSet)
 ```
 
 
@@ -394,38 +462,63 @@ While we do not particularly encourage a single position differential methylatio
 ```{r}
 beta <- getBeta(GRset.funnorm)
 age  <- pData(GRset.funnorm)$age
-dmp <- dmpFinder(beta, pheno = age  , type = "continuous")
+dmp <- dmpFinder(beta, pheno = age, type = "continuous")
 head(dmp)
 ```
 
 The function is essentially a wrapper around `lmFit` from `r Biocpkg("limma")`.
- 
+
+
+
+
+## Plotting DMPs
+
+It's always a good idea to visualise the results of a differential analysis, which we can do using the `plotCpg` function:
+
+```{r, eval = TRUE, echo = TRUE, plotCpg}
+cpgs <- rownames(dmp)[1:4]
+par(mfrow = c(2, 2))
+plotCpg(getBeta(GRset.funnorm), 
+        cpg = cpgs,
+        pheno = age, 
+        type = "continuous",
+        xlab = "age")
+```
+
 ## bumphunter: to find differentially methylated regions (DMRs)
 
-The `bumphunter` function in minfi is a version of the bump hunting algorithm [@bumphunter] adapted to the 450k array, relying on the `bumphunter` function implemented in the eponym package `r Biocpkg("bumphunter")` 
+The `bumphunter` function in minfi is a version of the bump hunting algorithm [@bumphunter] adapted to the 450k array, relying on the `bumphunter` function implemented in the eponymous `r Biocpkg("bumphunter")` package. 
 
-Instead of looking for association between a single genomic location and a phenotype of interest, `bumphunter` looks for genomic regions that are differentially methylated between two conditions. In the context of the 450k array, the algorithm first defines clusters of probes. Clusters are simply groups of probes such that two consecutive probe locations in the cluster are not separated by more than some distance `mapGap`. 
+Instead of looking for association between a single genomic location and a phenotype of interest, `bumphunter` looks for genomic regions that are differentially methylated between two conditions. In the context of the 450k array, the algorithm first defines clusters of probes. Clusters are simply groups of probes such that two consecutive probe locations in the cluster are not separated by more than some distance `maxGap`. 
 
 Briefly, the algorithm first computes a t-statistic at each genomic location, with optional smoothing. Then, it defines a candidate region to be a cluster of probes for which all the t-statistics exceed a predefined threshold. To test for significance of the candidate regions, the algorithm uses permutations (defined by the parameter `B`). The permutation scheme is expensive, and can take a few days when the number of candidate bumps is large. To avoid wasting time, we propose the following guideline:
 
-1. Define your phenotype of interest
+1. Define your phenotype of interest. We will demonstrate the bump hunting algorithm by comparing the cancer samples to the normal samples in our example dataset:
 ```{r}
 pheno <- pData(GRset.funnorm)$status
 designMatrix <- model.matrix(~ pheno)
+designMatrix
 ```
 2. Run the algorithm with `B=0` permutation on the Beta-values, with a medium difference cutoff, say `0.2` (which corresponds to `20\%` difference on the Beta-values):
-```{r, eval=FALSE}
-dmrs <- bumphunter(GRset.funnorm, design = designMatrix, 
-             cutoff = 0.2, B=0, type="Beta")
+```{r, eval=TRUE}
+bh_dmrs <- bumphunter(GRset.funnorm, 
+                      design = designMatrix, 
+                      cutoff = 0.2, 
+                      B = 0, 
+                      type = "Beta")
 ```
 3. If the number of candidate bumps is large, say $>30000$, increase the cutoff to reduce the number of candidate bumps. The rationale behind this is that the most of the additional candidate regions found by lowering the cutoff will be found to be non-significant after the permutation scheme,  and therefore time can be saved by being more stringent on the cutoff (high cutoff).  
 4. Once you have decided on the cutoff, run the algorithm with a large number of permutations, say `B=1000`:
 ```{r, eval=FALSE}
-dmrs <- bumphunter(GRset.funnorm, design = designMatrix, 
-             cutoff = 0.2, B=1000, type="Beta")
+# NOTE: Don't run, this takes a **long** time
+bh_dmrs <- bumphunter(GRset.funnorm, 
+                      design = designMatrix, 
+                      cutoff = 0.2, 
+                      B = 1000, 
+                      type = "Beta")
 ```
 
-Since the permutation scheme can be expensive, parallel computation is implemented in the `bumphunter` function. The [foreach](http://cran.r-project.org/web/packages/foreach/index.html) package allows different parallel `back-ends` that will distribute the computation across multiple cores in a single machine, or across machines in a cluster. For instance, if one wished to use 3 cores, the two following commands have to be run before running bumphunter:
+Since the permutation scheme can be expensive, parallel computation is implemented in the `bumphunter` function. The `r CRANpkg("foreach")` package allows different parallel `back-ends` that will distribute the computation across multiple cores in a single machine, or across machines in a cluster. For instance, if one wished to use 3 cores, the two following commands have to be run before running bumphunter:
 
 ```{r, eval=FALSE}
 library(doParallel)
@@ -434,29 +527,122 @@ registerDoParallel(cores = 3)
 
 The results of `bumphunter` are stored in a data frame with the rows being the different differentially methylated regions (DMRs): 
 
-```{r,  eval=FALSE}
-names(dmrs)
-head(dmrs$table, n=3)
+```{r,  eval=TRUE}
+names(bh_dmrs)
+head(bh_dmrs$table, n = 3)
 ```
-  
+
 As an example, we have run the bump hunting algorithm to find DMRs between colon and kidney (20 samples each from TCGA), with $B=1000$ permutations, and a cutoff of 0.2 on the Beta values:
-  
+
+```{r, eval = FALSE, echo = FALSE}
+# Ugly hack to make data available in vignette
+# TODO: What's the proper way to do this?
+lazyLoad(paste0(system.file(package = "tutorial.450k"), "/data/Rdata"))
+```
+
 ```{r, eval=FALSE}
+# NOTE: The `dmrs` object is included with the tutorial.450k package
+library(tutorial.450k)
 data("dmrs_B1000_c02")
 head(dmrs$table)
 ```
 
-The `start` and `end` columns indicate the limiting genomic locations of the DMR; the `value` column indicates the average difference in methylation in the bump, and the `area` column indicates the area of the bump with respect to the 0 line. The `fwer` column returns the family-wise error rate (FWER) of the regions estimated by the permeation scheme. One can filter the results by picking a cutoff on the FWER. 
+The `start` and `end` columns indicate the limiting genomic locations of the DMR; the `value` column indicates the average difference in methylation in the bump, and the `area` column indicates the area of the bump with respect to the 0 line. The `fwer` column returns the family-wise error rate (FWER) of the regions estimated by the permutation scheme. One can filter the results by picking a cutoff on the FWER.
 
 
-## Block finder.
+
+## Plotting DMRs
+
+As with DMPs, it's always a good idea to plot DMRs. `r Biocpkg("minfi")` does not currently include any functionality for doing this directly but will soon[^soon]. In the mean time, we can (with a little bit of a work) make a publication-quality figure using the `r Biocpkg("Gviz")`. 
+
+[^soon]: Famous last words ...
+
+__NOTE:__ This figure takes a while to generate because `r Biocpkg("Gviz")` needs to first download some data.
+
+```{r, eval = TRUE, echo = TRUE, Gviz}
+library(Gviz)
+genome <- "hg19"
+# NOTE: Using the non-permuted 
+dmr <- bh_dmrs$table[1, ]
+chrom <- dmr$chr
+start <- dmr$start
+end <- dmr$end
+minbase <- start - 0.25 * (end - start)
+maxbase <- end + 0.25 * (end - start)
+pal <- c("#E41A1C", "#377EB8")
+
+# Start building the tracks
+iTrack <- IdeogramTrack(genome = genome, 
+                        chromosome = dmr$chr, 
+                        name = "")
+gTrack <- GenomeAxisTrack(col = "black", 
+                          cex = 1, 
+                          name = "", 
+                          fontcolor = "black")
+# NOTE: This track takes a little while to create
+rTrack <- UcscTrack(genome = genome, 
+                    chromosome = chrom, 
+                    track = "refGene",
+                    from = minbase,
+                    to = maxbase, 
+                    trackType = "GeneRegionTrack",
+                    rstarts = "exonStarts", 
+                    rends = "exonEnds", 
+                    gene = "name",
+                    symbol = "name2", 
+                    transcript = "name",
+                    strand = "strand",
+                    fill = "darkblue",
+                    stacking = "squish", 
+                    name = "RefSeq",
+                    showId = TRUE, 
+                    geneSymbol = TRUE)
+# methylation data track
+gr <- granges(GRset.funnorm)
+gr$beta <- getBeta(GRset.funnorm)
+methTrack <- DataTrack(range = gr,
+                       groups = targets$status,
+                       genome = genome,
+                       chromosome = chrom, 
+                       ylim = c(-0.05, 1.05), 
+                       col = pal,
+                       type = c("a","p"), 
+                       name = "DNA Meth.\n(beta value)",
+                       background.panel = "white", 
+                       legend = TRUE, 
+                       cex.title = 0.8,
+                       cex.axis = 0.8, 
+                       cex.legend = 0.8)
+# DMR position data track
+dmrTrack <- AnnotationTrack(start = start, 
+                            end = end, 
+                            genome = genome, 
+                            name = "DMR",
+                            chromosom = chrom)
+# Finally, plot the tracks
+tracks <- list(iTrack, gTrack, methTrack, dmrTrack, rTrack)
+sizes <- c(2, 2, 5, 2, 3) # set up the relative sizes of the tracks
+plotTracks(tracks, 
+           from = minbase, 
+           to = maxbase, 
+           showTitle = TRUE, 
+           add53 = TRUE,
+           add35 = TRUE, 
+           grid = TRUE, 
+           lty.grid = 3, 
+           sizes = sizes, 
+           length(tracks))
+```
+
+
+## Block finder
 
 The approximately 170,000 open sea probes on the 450K array can be used to detect long-range changes in methylation status. These large scale changes that can range up to several Mb have typically been identified only through whole-genome bisulfite sequencing. The function `blockFinder` groups the average methylation values in open-sea probe cluster (via `cpgCollapse`) into large regions, and then run the `bumphunter` algorithm with a large (250KB+) smoothing window (see the bump hunting section for DMRs above).
 
 
 ## Batch effects correction with SVA
 
-Surrogate variable analysis (SVA) [@sva1,@sva2] is a useful tool to identified surrogate variables for unwanted variation while protecting for a phenotype of interest. In our experience, running SVA after normalizing the 450K data with `preprocessFunnorm` or `preprocessQuantile` increases the statistical power of the downstream analysis. For instance, to run SVA on the M-values, protecting for case-control status, the following code can be used to estimate the surrogate variables (this can take a few hours to run):
+Surrogate variable analysis (SVA) [@sva1,@sva2] is a useful tool to identified surrogate variables for unwanted variation while protecting for a phenotype of interest. In our experience, running SVA after normalizing the 450K data with `preprocessFunnorm` or `preprocessQuantile` increases the statistical power of the downstream analysis. For instance, to run SVA on the M-values, protecting for case-control status, the following code can be used to estimate the surrogate variables (this can take a few hours to run on a full dataset):
 
 ```{r}
 library(sva)
@@ -469,23 +655,26 @@ sva.results <- sva(mval, mod, mod0)
 
 Once the surrogate variables are computed, one can include them in the downstream analysis to adjust for unknown unwanted variation. See the [sva vignette](http://bioconductor.org/packages/release/bioc/vignettes/sva/inst/doc/sva.pdf) for a more comprehensive use of `sva`.
 
+## Importing data from The Cancer Genome Atlas (TCGA)
+
+The package [tcgaR](https://github.com/Jfortin1/tcgaR) directly imports 450k methylation data into R from the TCGA portal by building an `RGChannelSet`. Normal and tumor samples are available for more than 20 cancer types. The package also contains convenient functions to import the corresponding metadata and clinical data.
 
 
 # Other tasks
 
 ## A/B compartments prediction.
 
-The function `compartments` extracts A/B compartments from Illumina methylation microarrays, as described in [@reconstructbioRxiv]. Analysis of Hi-C data has shown that the genome can be divided into two compartments (A/B compartments) that are cell-type specific and are associated with open and closed chromatin respectively. The approximately 170,000 open sea probes on the 450k array can be used to estimate these compartments by computing the first eigenvector on a binned correlation matrix. The binning resolution can be specified by `resolution`, and by default is set to a 100 kb. We do not recommend higher resolutions because of the low-resolution probe design of the 450k array. For instance, to extract the compartments for chromosome 12, one can use
+The function `compartments` extracts A/B compartments from Illumina methylation microarrays, as described in [@A/B-compartments]. Analysis of Hi-C data has shown that the genome can be divided into two compartments (A/B compartments) that are cell-type specific and are associated with open and closed chromatin respectively. The approximately 170,000 open sea probes on the 450k array can be used to estimate these compartments by computing the first eigenvector on a binned correlation matrix. The binning resolution can be specified by `resolution`, and by default is set to a 100 kb. We do not recommend higher resolutions because of the low-resolution probe design of the 450k array. For instance, to extract the compartments for chromosome 12, one can use
 
 ```{r, eval=FALSE}
-ab <- compartments(grset.quantile, chr="chr14", resolution=100`1000)
+ab <- compartments(GRset.quantile, chr="chr14", resolution=100000)
 ```
 
 ## Potentially useful functions
 
 ### getSnpBeta
 
-The array contains by design 65 probes that are not meant to interrogate methylation status, but instead are designed to interrogate SNPs. By default, minfi drops these probes. The function `getSnpBeta`  allows the user to extract the Beta values for those probes from an `RGChannelSet`. The return object is a matrix with the columns being the samples and the rows being the different SNP probes:
+The array contains by design 65 probes that are not meant to interrogate methylation status, but instead are designed to interrogate SNPs. By default, minfi drops these probes. The function `getSnpBeta` allows the user to extract the Beta values for those probes from an `RGChannelSet`. The return object is a matrix with the columns being the samples and the rows being the different SNP probes:
 
 ```{r}
 snps <- getSnpBeta(RGSet)
@@ -502,7 +691,18 @@ The function `getOOB` applied to an `RGChannelSet` retrieves the so-called `out-
 oob <- getOOB(RGSet)
 ```
 
+# shinyMethyl
 
+`r Biocpkg("shinyMethyl")` provides interactive visualisation of Illumina 450k methylation arrays that can be useful for performing quality control, particularly of larger datasets. For further details, please consult the [shinyMethyl vignette](http://bioconductor.org/packages/release/bioc/shinyMethyl/sva/inst/doc/shinyMethyl.pdf)
+
+We briefly demonstrate the functionality of `r Biocpkg("shinyMethyl")` using an example dataset that contains the extracted data of 369 Head and Neck cancer samples downloaded from The Cancer Genome Atlas (TCGA) data portal [@tcga]: 310 tumor samples, 50 matched normals and 9 replicates of a control cell line. The first `shinyMethylSet`
+object was created from the raw data (no normalization) and is stored under the name `summary.tcga.raw`; the second `shinyMethylSet` object was created from a `GenomicRatioSet` containing the normalized data and the file is stored under the name the name `summary.tcga.norm`
+
+```{r, eval = FALSE}
+library(shinyMethyl)
+library(shinyMethylData)
+runShinyMethyl(summary.tcga.raw, summary.tcga.norm)
+```
 
 # Session information
 
@@ -514,4 +714,3 @@ sessionInfo()
 
 
 # References
-
