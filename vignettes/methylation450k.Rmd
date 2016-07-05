@@ -146,8 +146,6 @@ See the [minfi vignette](http://bioconductor.org/packages/devel/bioc/vignettes/m
 
 ![alt tag](./flowChart.png)
 
-__NOTE:__ Figure is slightly out of date (replace `read.450.exp` with `read.metharray.exp`)
-
 ## MethylSet and RatioSet
 
 A `MethylSet` objects contains only the methylated and unmethylated signals.  You create this by
@@ -542,10 +540,10 @@ As an example, we have run the bump hunting algorithm to find DMRs between colon
 lazyLoad(paste0(system.file(package = "tutorial.450k"), "/data/Rdata"))
 ```
 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 # NOTE: The `dmrs` object is included with the tutorial.450k package
 library(tutorial.450k)
-dmrs
+data("dmrs_B1000_c02")
 head(dmrs$table)
 ```
 
