@@ -540,7 +540,7 @@ As an example, we have run the bump hunting algorithm to find DMRs between colon
 lazyLoad(paste0(system.file(package = "tutorial.450k"), "/data/Rdata"))
 ```
 
-```{r, eval=TRUE}
+```{r, eval=FALSE}
 # NOTE: The `dmrs` object is included with the tutorial.450k package
 library(tutorial.450k)
 data("dmrs_B1000_c02")

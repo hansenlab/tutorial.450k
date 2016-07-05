@@ -700,23 +700,8 @@ registerDoParallel(cores = 3)</code></pre>
 <p>As an example, we have run the bump hunting algorithm to find DMRs between colon and kidney (20 samples each from TCGA), with <span class="math inline">\(B=1000\)</span> permutations, and a cutoff of 0.2 on the Beta values:</p>
 <pre class="r"><code># NOTE: The `dmrs` object is included with the tutorial.450k package
 library(tutorial.450k)
-data(&quot;dmrs_B1000_c02&quot;)</code></pre>
-<pre><code>## Warning in data(&quot;dmrs_B1000_c02&quot;): data set 'dmrs_B1000_c02' not found</code></pre>
-<pre class="r"><code>head(dmrs$table)</code></pre>
-<pre><code>##         chr     start       end      value     area cluster indexStart
-## 15861  chr8 145103393 145107199  0.3767581 6.404887  194325     238277
-## 4810  chr13 113425756 113428172  0.4257673 5.960743   57562     337302
-## 4064  chr12  54446019  54447349  0.3278039 5.900470   46543     311839
-## 17813 chr10  11206772  11208339 -0.4148710 5.393322   21466     251989
-## 18360 chr10 130844121 130844899 -0.5869309 5.282378   29724     269921
-## 4054  chr12  54409207  54409770  0.4370705 5.244846   46529     311742
-##       indexEnd  L clusterL p.value fwer p.valueArea fwerArea
-## 15861   238293 17       17       0    0           0        0
-## 4810    337315 14       24       0    0           0        0
-## 4064    311856 18       28       0    0           0        0
-## 17813   252001 13       15       0    0           0        0
-## 18360   269929  9        9       0    0           0        0
-## 4054    311753 12       42       0    0           0        0</code></pre>
+data(&quot;dmrs_B1000_c02&quot;)
+head(dmrs$table)</code></pre>
 <p>The <code>start</code> and <code>end</code> columns indicate the limiting genomic locations of the DMR; the <code>value</code> column indicates the average difference in methylation in the bump, and the <code>area</code> column indicates the area of the bump with respect to the 0 line. The <code>fwer</code> column returns the family-wise error rate (FWER) of the regions estimated by the permutation scheme. One can filter the results by picking a cutoff on the FWER.</p>
 </div>
 <div id="plotting-dmrs" class="section level2">
